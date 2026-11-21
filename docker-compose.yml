@@ -1,0 +1,39 @@
+name: ad-stack
+
+services:
+  samba:
+    image: diegogslomp/samba-ad-dc:latest
+    container_name: samba-ad
+    hostname: dc1
+    restart: unless-stopped
+    privileged: true
+    # Host networking is required: Samba AD DNS must hand out an address
+    # that clients can actually reach (the host IP, not an internal bridge IP).
+    network_mode: host
+    environment:
+      # NetBIOS/domain name (short, no dots) and Kerberos realm (uppercase DNS name)
+      - DOMAIN=${AD_DOMAIN:-AD}
+      - REALM=${AD_REALM:-AD.EXAMPLE.COM}
+      - ADMIN_PASS=${ADMIN_PASS:-Passw0rd!2026}
+      - DNS_FORWARDER=${DNS_FORWARDER:-1.1.1.1}
+      - SERVER_ROLE=dc
+      - DNS_BACKEND=SAMBA_INTERNAL
+    volumes:
+      # Samba's whole install lives here: smb.conf, private/, sysvol, state
+      - samba_data:/usr/local/samba
+
+  lam:
+    image: jacksgt/ldap-account-manager:latest
+    container_name: lam-gui
+    restart: unless-stopped
+    # Same host network as Samba: Apache listens on 8080 inside the image,
+    # and LAM reaches the AD DC at ldap://localhost:389.
+    network_mode: host
+    depends_on:
+      - samba
+    volumes:
+      - lam_data:/var/www/html/config
+
+volumes:
+  samba_data:
+  lam_data:
